@@ -56,6 +56,8 @@ def calculate_availability(busy_intervals, day, timezone="US/Central"):
     for start, end in busy_intervals:
         if day_end <= current_time or day_end <= start:
             break
+        start = start.astimezone(tz)
+        end = end.astimezone(tz)
         if current_time < start:
             availability.append((current_time, start))
         current_time = max(current_time, end)
@@ -70,7 +72,11 @@ def format_availability(availability, output_timezone=None):
     Format availability into a human-readable string.
     """
     formatted = []
-    timefmt = '%H:%M'
+    def fmt_time(dt):
+        if dt.minute == 0:
+            return dt.strftime("%I%p").lstrip('0')  # "11 AM"
+        else:
+            return dt.strftime("%I:%M%p").lstrip('0')  # "11:30 AM"
     output_timezone_pretty = {
         "Asia/Kolkata": "IST",
         "US/Central": "CT",
@@ -78,10 +84,10 @@ def format_availability(availability, output_timezone=None):
         "US/Pacific": "PT",
         "US/Mountain": "MT",
     }
-    tz = pytz.timezone(output_timezone)
     for start, end in availability:
         if output_timezone is not None:
-            formatted.append(f"{output_timezone_pretty[output_timezone]} {start.astimezone(tz).strftime(timefmt)} - {end.astimezone(tz).strftime(timefmt)}, CT: {start.strftime(timefmt)} - {end.strftime(timefmt)}")
+            tz = pytz.timezone(output_timezone)
+            formatted.append(f"{output_timezone_pretty[output_timezone]} {fmt_time(start.astimezone(tz))} - {fmt_time(end.astimezone(tz))}, CT: {fmt_time(start)} - {fmt_time(end)}")
         else:
             formatted.append(f"{start.strftime('%H:%M')} - {end.strftime('%H:%M')}")
     return "\n".join(formatted)
@@ -116,16 +122,16 @@ def main():
     parser.add_argument(
         "timezone",
         type=str,
-        default="US/Central",
+        default=None,
         nargs="?",
-        help="The timezone to process (e.g., America/Chicago)."
+        help="The timezone to process (e.g., US/Central)."
     )
 
     args = parser.parse_args()
     output_timezone = args.timezone
 
     # Validate the timezone
-    if output_timezone not in pytz.all_timezones:
+    if output_timezone is not None and output_timezone not in pytz.all_timezones:
         print(f"Invalid timezone: {timezone_input}")
         print("Here are some valid timezones:")
         print(", ".join(pytz.common_timezones[:10]) + ", ...")
@@ -136,7 +142,7 @@ def main():
         all_days = next_weekdays()
         for day in all_days:
             availability = calculate_availability(busy_intervals, day, timezone=timezone)
-            print(f"Availability for {day.strftime('%A (%b %d)')}")
+            print(f"{day.strftime('%A (%b')} {day.strftime('%d)').lstrip('0')}")
             formatted_availability = format_availability(availability, output_timezone)
             print(formatted_availability)
 
